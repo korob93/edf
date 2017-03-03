@@ -27,11 +27,13 @@ class EDFFile
 	_signals	= [ ]
 
 	constructor: ( @edf_path ) ->
-		if not fs.existsSync @edf_path
+		@is_buffer = Buffer.isBuffer @edf_path
+
+		if not @is_buffer && not fs.existsSync @edf_path
 			throw Error( "Invalid path specified: " + @edf_path )
 
 		# Open a handle.
-		@_handle	= fs.openSync @edf_path, "r"
+		@_handle	= if @is_buffer then @edf_path else fs.openSync @edf_path, "r"
 
 		@_header_item	= { }
 		@_signal_item	= { }
@@ -86,7 +88,7 @@ class EDFFile
 
 				return _o
 			else
-				# Since the total length of the header specification for the signal will depend on the 
+				# Since the total length of the header specification for the signal will depend on the
 				# number of signals, multiply accordingly.
 				position += ( @get_header_item( "num_signals_in_data_record" ) * x.length )
 
@@ -96,12 +98,14 @@ class EDFFile
 
 		_o["gain"]		= ( parseFloat( _o.physical_max ) - parseFloat( _o.physical_min ) ) / ( parseFloat( _o.digital_max ) - parseFloat( _o.digital_min ) )
 		_o["offset"]		= ( _o.physical_max / _o.gain ) - _o.digital_max
-		_o["sample_rate"]	= _o.num_samples_in_data_record / @get_header_item "duration_of_data_record" 
+		_o["sample_rate"]	= _o.num_samples_in_data_record / @get_header_item "duration_of_data_record"
 		_o
 
 	_get_buffer_slice: ( length, position ) ->
-		# Returns a buffer of given length, filled with the 
+		# Returns a buffer of given length, filled with the
 		# data from the file at given position.
+		if(@is_buffer)
+			return @_handle.slice position, position + length
 
 		k = new Buffer length
 		fs.readSync @_handle, k, 0, length, position
@@ -130,7 +134,7 @@ class EDFFile
 		# If we have the cached item, simply return it.
 		if @_signal_item[_i]?
 			return @_signal_item[_i]
-		
+
 		# Gets the spec object.
 		spec		= @_get_signal_spec signal_index, name
 
@@ -155,7 +159,7 @@ class EDFFile
 		block_size = 0
 		for _signal in _signals
 			block_size += _signal.num_samples_in_data_record * 2
-		
+
 		# Figre out how many blocks we're going to need to read.
 		total_seconds	= ( end - start )
 
@@ -187,7 +191,7 @@ class EDFFile
 		# Iterate through all the blocks to read.
 		for i in [0...blocks_to_read]
 
-			# Get the channel block data by slicing through. 
+			# Get the channel block data by slicing through.
 			# Position is:
 			#	base offset ( header+(records_to_skip*block_size) ) + (the current iteration * the size of each block) + how far into the block our channel is
 			# Length is:
@@ -203,7 +207,7 @@ class EDFFile
 			else
 				#parse signal with original algoritm
 				_samples = _samples.concat(@_parse_signal_samples channel_block, i, records_to_skip, _signal)
-			
+
 		return _samples
 
 	_parse_signal_samples: (channel_block, i, records_to_skip, _signal) ->
