@@ -24,9 +24,8 @@ class EDFFile
 			 { "name": "prefiltering", "length": 80 },
 			 { "name": "num_samples_in_data_record", "length": 8 } ]
 
-	_signals	= [ ]
-
 	constructor: ( @edf_path ) ->
+		@_signals	= [ ]
 		@is_buffer = Buffer.isBuffer @edf_path
 
 		if not @is_buffer && not fs.existsSync @edf_path
@@ -38,7 +37,7 @@ class EDFFile
 		@_header_item	= { }
 		@_signal_item	= { }
 
-		# Run through and populate _signals using the specs.
+		# Run through and populate @_signals using the specs.
 		for i in [0...parseInt(@get_header_item( "num_signals_in_data_record"))]
 
 			_specs = { }
@@ -47,7 +46,7 @@ class EDFFile
 			for spec in _signal_spec
 				_specs[spec.name] = @get_signal_item i, spec.name
 
-			_signals.push _specs
+			@_signals.push _specs
 
 	get_header_offset: ( ) ->
 		# 256 + ( number of signals  * 256 )
@@ -94,7 +93,7 @@ class EDFFile
 
 	_get_signal_obj: ( signal_index ) ->
 		# Get a signal spec object with gain and offset defined.
-		_o		= _signals[signal_index]
+		_o		= @_signals[signal_index]
 
 		_o["gain"]		= ( parseFloat( _o.physical_max ) - parseFloat( _o.physical_min ) ) / ( parseFloat( _o.digital_max ) - parseFloat( _o.digital_min ) )
 		_o["offset"]		= ( _o.physical_max / _o.gain ) - _o.digital_max
@@ -152,15 +151,15 @@ class EDFFile
 			return _r
 
 		# Force valid signal index..
-		if not _signals[signal_index]?
+		if not @_signals[signal_index]?
 			throw new Error "Invalid Signal index specified."
 
 		# Get the block size in bytes.
 		block_size = 0
-		for _signal in _signals
+		for _signal in @_signals
 			block_size += _signal.num_samples_in_data_record * 2
 
-		# Figre out how many blocks we're going to need to read.
+		# Figure out how many blocks we're going to need to read.
 		total_seconds	= ( end - start )
 
 		# Note that this will yield more data at the end if half a block is specified.
@@ -176,7 +175,7 @@ class EDFFile
 		channel_size = @get_signal_item( _signal_index, "num_samples_in_data_record" ) * 2
 
 		# Figure out how many records to skip based on what start time was specified.
-		records_to_skip = start * @get_header_item( "duration_of_data_record" )
+		records_to_skip = Math.floor(start / @get_header_item( "duration_of_data_record" ))
 
 		# Helper variable that is the base offset for seeking..
 		base_offset = ( records_to_skip * block_size ) + @get_header_offset( )
